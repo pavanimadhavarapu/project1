@@ -4,7 +4,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/ChakriAmajala/HTML-Self-page.git'
+                git branch: 'main', url: 'https://github.com/pavanimadhavarapu/project1.git'
             }
         }
 
