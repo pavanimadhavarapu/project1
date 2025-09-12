@@ -1,6 +1,16 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKERHUB_CRED = "dockerhub-cred"            // Jenkins credential ID
+        DOCKERHUB_NAMESPACE = "pavanimadhavarapu"  // Your Docker Hub username
+        IMAGE_NAME = "${DOCKERHUB_NAMESPACE}/html-self-page"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        HOST_PORT = "8081"                          // Port on host
+        CONTAINER_PORT = "80"                       // Container internal port
+        CONTAINER_NAME = "html-self-page"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -11,7 +21,20 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t html-self-page .'
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+                }
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CRED}", usernameVariable: "DOCKER_USER", passwordVariable: "DOCKER_PASS")]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push ${IMAGE_NAME}:latest
+                    '''
                 }
             }
         }
@@ -19,15 +42,16 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
-                    sh '''
-                    # stop & remove old container if exists
-                    docker rm -f html-self-page || true
+                    sh """
+                    # Stop & remove old container if exists
+                    docker rm -f ${CONTAINER_NAME} || true
 
-                    # run new container
-                    docker run -d -p 8081:80 --name html-self-page html-self-page
-                    '''
+                    # Run new container
+                    docker run -d -p ${HOST_PORT}:${CONTAINER_PORT} --name ${CONTAINER_NAME} ${IMAGE_NAME}:${IMAGE_TAG}
+                    """
                 }
             }
         }
     }
 }
+
