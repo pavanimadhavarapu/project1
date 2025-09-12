@@ -2,12 +2,12 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CRED = "dockerhub-cred"            // Jenkins credential ID
-        DOCKERHUB_NAMESPACE = "pavanimadhavarapu"  // Your Docker Hub username
+        DOCKERHUB_NAMESPACE = "pavanimadhavarapu"
         IMAGE_NAME = "${DOCKERHUB_NAMESPACE}/html-self-page"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        HOST_PORT = "8081"                          // Port on host
-        CONTAINER_PORT = "80"                       // Container internal port
+        DOCKERHUB_CRED = "dockerhub-credentials-id"  // your Docker Hub credentials in Jenkins
+        HOST_PORT = "8084"     // external port
+        CONTAINER_PORT = "80"  // container port
         CONTAINER_NAME = "html-self-page"
     }
 
@@ -20,20 +20,18 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
-                }
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
             }
         }
 
-        stage('Push to DockerHub') {
+        stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CRED}", usernameVariable: "DOCKER_USER", passwordVariable: "DOCKER_PASS")]) {
                     sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${IMAGE_NAME}:latest
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
                     '''
                 }
             }
@@ -41,15 +39,19 @@ pipeline {
 
         stage('Run Container') {
             steps {
-                script {
-                    sh """
-                    # Stop & remove old container if exists
+                sh """
+                    # Stop any old container using the same name
                     docker rm -f ${CONTAINER_NAME} || true
+
+                    # Stop any container currently using port 8084
+                    existing=\$(docker ps -q --filter "publish=${HOST_PORT}")
+                    if [ ! -z "\$existing" ]; then
+                        docker rm -f \$existing
+                    fi
 
                     # Run new container
                     docker run -d -p ${HOST_PORT}:${CONTAINER_PORT} --name ${CONTAINER_NAME} ${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
+                """
             }
         }
     }
